@@ -1,7 +1,6 @@
 import * as cdk from '@aws-cdk/core';
 import {Duration, Stack} from '@aws-cdk/core';
 import * as ec2 from "@aws-cdk/aws-ec2";
-import {SubnetType} from "@aws-cdk/aws-ec2";
 import * as ecs from "@aws-cdk/aws-ecs";
 import {FargatePlatformVersion, Protocol} from "@aws-cdk/aws-ecs";
 import * as iam from "@aws-cdk/aws-iam";
@@ -97,7 +96,8 @@ export class FargateConfig {
                 cluster: cluster,
                 taskDefinition: taskDefinition,
                 serviceName: fargateServiceName,
-                maxHealthyPercent: 100,
+                maxHealthyPercent: 200,
+                minHealthyPercent: 0,
                 platformVersion: FargatePlatformVersion.LATEST,
                 securityGroups: [uiTaskSecurityGroup],
                 desiredCount: 1,
@@ -149,7 +149,7 @@ export class FargateConfig {
             targets: [service]
         });
 
-        const listener = new elb.ApplicationListener(scope, loadBalancerListener, {
+        new elb.ApplicationListener(scope, loadBalancerListener, {
             loadBalancer: balancer,
             port: 80,
             defaultTargetGroups: [target]

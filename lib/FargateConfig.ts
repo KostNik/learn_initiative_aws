@@ -1,10 +1,13 @@
 import * as cdk from '@aws-cdk/core';
-import {Duration} from '@aws-cdk/core';
+import {Duration, Stack} from '@aws-cdk/core';
 import * as ec2 from "@aws-cdk/aws-ec2";
+import {SubnetType} from "@aws-cdk/aws-ec2";
 import * as ecs from "@aws-cdk/aws-ecs";
+import {FargatePlatformVersion, Protocol} from "@aws-cdk/aws-ecs";
 import * as iam from "@aws-cdk/aws-iam";
 import * as logs from "@aws-cdk/aws-logs";
 import * as elb from "@aws-cdk/aws-elasticloadbalancingv2";
+import {IpAddressType} from "@aws-cdk/aws-elasticloadbalancingv2";
 
 import {
     clusterName,
@@ -12,7 +15,11 @@ import {
     fargateServiceName,
     fargateTaskDefinition,
     fargateTaskDefinitionContainer,
-    fargateTaskFamily, loadBalancerListener, loadBalancerName, loadBalancerTargetGroup, securityGroup,
+    fargateTaskFamily,
+    loadBalancerListener,
+    loadBalancerName,
+    loadBalancerTargetGroup,
+    securityGroup,
     servicePrincipal,
     vpcName
 } from "./StackConstants";
@@ -23,9 +30,10 @@ export class FargateConfig {
     constructor(stack: cdk.Stack, repository: IRepository) {
 
         let vpc = new ec2.Vpc(stack, vpcName, {
-            maxAzs: 3,
+            maxAzs: 2,
             enableDnsHostnames: true,
-            enableDnsSupport: true
+            enableDnsSupport: true,
+            cidr: "10.0.0.0/16",
         });
 
         let cluster = new ecs.Cluster(stack, clusterName, {
@@ -38,12 +46,7 @@ export class FargateConfig {
             roleName: executionRoleName
         })
 
-        let logDriver = ecs.LogDrivers.awsLogs({
-            logGroup: new logs.LogGroup(stack, 'StoreLogs', {
-                retention: logs.RetentionDays.ONE_DAY
-            }),
-            streamPrefix: "StoreLogs"
-        });
+        let logDriver = FargateConfig.defineLogs(stack);
 
         execRole.addToPolicy(new iam.PolicyStatement({
                 effect: iam.Effect.ALLOW,
@@ -73,29 +76,45 @@ export class FargateConfig {
             taskDefinition: taskDefinition,
             image: containerImage,
             logging: logDriver,
-            environment: {"key": "value"},
-            essential: true
+            environment: {"some_key": "some_value"},
+            essential: true,
         }).addPortMappings({
-            hostPort: 8080,
-            containerPort: 8080
+            containerPort: 8080,
+            protocol: Protocol.TCP
         });
 
         const uiTaskSecurityGroup = new ec2.SecurityGroup(stack, securityGroup, {
-            vpc: vpc
+            vpc: vpc,
+            allowAllOutbound: true,
+            securityGroupName: securityGroup
         });
 
-        uiTaskSecurityGroup.addIngressRule(ec2.Peer.ipv4("10.0.0.0/8"), ec2.Port.tcp(8080));
+        uiTaskSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80));
+        uiTaskSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(8080));
 
         let service = new ecs.FargateService(stack, fargateServiceName,
             {
                 cluster: cluster,
                 taskDefinition: taskDefinition,
+                serviceName: fargateServiceName,
+                maxHealthyPercent: 100,
+                platformVersion: FargatePlatformVersion.LATEST,
                 securityGroups: [uiTaskSecurityGroup],
-                serviceName: fargateServiceName
+                desiredCount: 1,
+                assignPublicIp: true
             })
 
         FargateConfig.createLoadBalancer(stack, service, vpc, uiTaskSecurityGroup)
 
+    }
+
+    private static defineLogs(stack: Stack) {
+        return ecs.LogDrivers.awsLogs({
+            logGroup: new logs.LogGroup(stack, 'StoreLogs', {
+                retention: logs.RetentionDays.ONE_DAY
+            }),
+            streamPrefix: "StoreLogs"
+        });
     }
 
     private static createLoadBalancer(
@@ -104,11 +123,15 @@ export class FargateConfig {
         vpc: ec2.IVpc,
         securityGroup: ec2.SecurityGroup
     ) {
+
         const balancer = new elb.ApplicationLoadBalancer(scope, loadBalancerName, {
             vpc: vpc,
             securityGroup: securityGroup,
+            internetFacing: true,
+            ipAddressType: IpAddressType.IPV4,
             loadBalancerName: loadBalancerName
         });
+
 
         const target = new elb.ApplicationTargetGroup(scope, loadBalancerTargetGroup, {
             targetType: elb.TargetType.IP,
@@ -128,7 +151,7 @@ export class FargateConfig {
 
         const listener = new elb.ApplicationListener(scope, loadBalancerListener, {
             loadBalancer: balancer,
-            port: 8080,
+            port: 80,
             defaultTargetGroups: [target]
         });
 

@@ -6,6 +6,6 @@ import {FargateConfig} from "../lib/FargateConfig";
 import {ECRConfig} from "../lib/ECRConfig";
 
 const app = new cdk.App();
-let ecsStack = new EcsStack(app, 'EcsStack');
+let ecsStack = new EcsStack(app, 'LiEcsStack');
 let ecrConfig = new ECRConfig(ecsStack);
 let fargateConfig = new FargateConfig(ecsStack, ecrConfig.getOrCreateRepository());

@@ -21,7 +21,7 @@ import {
     securityGroup,
     servicePrincipal,
     vpcName
-} from "./StackConstants";
+} from "./consts/ECSConstants";
 import {IRepository} from "@aws-cdk/aws-ecr";
 
 export class FargateConfig {
@@ -88,7 +88,6 @@ export class FargateConfig {
             securityGroupName: securityGroup
         });
 
-        uiTaskSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80));
         uiTaskSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(8080));
 
         let service = new ecs.FargateService(stack, fargateServiceName,

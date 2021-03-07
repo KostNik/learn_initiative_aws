@@ -2,7 +2,7 @@ import * as cdk from '@aws-cdk/core';
 import {RemovalPolicy, Stack} from '@aws-cdk/core';
 import * as ecr from "@aws-cdk/aws-ecr";
 import {IRepository, Repository} from "@aws-cdk/aws-ecr";
-import {dockerRepoName} from "./StackConstants";
+import {dockerRepoName} from "./consts/ECSConstants";
 
 export class ECRConfig {
     private readonly _stack: Stack;

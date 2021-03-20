@@ -1,23 +1,27 @@
 import * as cdk from '@aws-cdk/core';
-import {RemovalPolicy, SecretValue} from '@aws-cdk/core';
+import {RemovalPolicy} from '@aws-cdk/core';
 import * as ec2 from "@aws-cdk/aws-ec2";
 import {Port, SubnetType} from "@aws-cdk/aws-ec2";
 import * as rds from "@aws-cdk/aws-rds";
 import {AuroraMysqlEngineVersion} from "@aws-cdk/aws-rds";
 
-import {vpcName} from "./consts/ECSConstants";
 import {DatabaseClusterProps} from "@aws-cdk/aws-rds/lib/cluster";
 import {IClusterEngine} from "@aws-cdk/aws-rds/lib/cluster-engine";
 import {InstanceProps} from "@aws-cdk/aws-rds/lib/props";
-import {databaseAdminUserName, databaseDefaultName, rdsClusterName} from "./consts/RDSConstants";
-import * as kms from "@aws-cdk/aws-kms";
+import {databaseDefaultName, rdsClusterName, rdsVpcName} from "./consts/RDSConstants";
 import {RetentionDays} from "@aws-cdk/aws-logs";
+import {Secret} from "@aws-cdk/aws-secretsmanager";
 
 export class RDSConfig {
 
-    constructor(stack: cdk.Stack) {
+    private readonly stack: cdk.Stack;
 
-        let vpc = new ec2.Vpc(stack, vpcName, {
+    constructor(stack: cdk.Stack) {
+        this.stack = stack;
+    }
+
+    configureRDB(dbSecret: Secret): void {
+        let vpc = new ec2.Vpc(this.stack, rdsVpcName, {
             maxAzs: 2,
         });
 
@@ -33,19 +37,7 @@ export class RDSConfig {
             }
         }
 
-        let adminSecret = new kms.Key(stack, "rdsAdminSecret", {
-            description: "The secret for RDS admin user",
-            enableKeyRotation: false,
-            enabled: true,
-            removalPolicy: RemovalPolicy.DESTROY
-        })
-
-        let dbSecret = new rds.DatabaseSecret(stack, "rds-li-secret", {
-            username: databaseAdminUserName
-        })
-
-        // let credentials = rds.Credentials.fromSecret(dbSecret);
-        let credentials = rds.Credentials.fromPassword(databaseAdminUserName, SecretValue.plainText("password1"));
+        let credentials = rds.Credentials.fromSecret(dbSecret);
 
         let clusterProps: DatabaseClusterProps = {
             engine: clusterEngine,
@@ -57,7 +49,8 @@ export class RDSConfig {
             cloudwatchLogsRetention: RetentionDays.ONE_DAY
         }
 
-        let databaseCluster = new rds.DatabaseCluster(stack, rdsClusterName, clusterProps);
+        let databaseCluster = new rds.DatabaseCluster(this.stack, rdsClusterName, clusterProps);
         databaseCluster.connections.allowFromAnyIpv4(Port.allTcp())
     }
+
 }

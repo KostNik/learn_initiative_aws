@@ -23,29 +23,34 @@ import {
     vpcName
 } from "./consts/ECSConstants";
 import {IRepository} from "@aws-cdk/aws-ecr";
+import {AppConfiguration} from "./DataManagement";
 
 export class FargateConfig {
+    private readonly _stack: Stack;
 
-    constructor(stack: cdk.Stack, repository: IRepository) {
+    constructor(stack: cdk.Stack) {
+        this._stack = stack;
+    }
 
-        let vpc = new ec2.Vpc(stack, vpcName, {
+    storeAppConfiguration(repository: IRepository, appConf: AppConfiguration) {
+        let vpc = new ec2.Vpc(this._stack, vpcName, {
             maxAzs: 2,
             enableDnsHostnames: true,
             enableDnsSupport: true,
             cidr: "10.0.0.0/16",
         });
 
-        let cluster = new ecs.Cluster(stack, clusterName, {
+        let cluster = new ecs.Cluster(this._stack, clusterName, {
             clusterName: clusterName,
             vpc: vpc
         })
 
-        let execRole = new iam.Role(stack, executionRoleName, {
+        let execRole = new iam.Role(this._stack, executionRoleName, {
             assumedBy: new iam.ServicePrincipal(servicePrincipal),
             roleName: executionRoleName
         })
 
-        let logDriver = FargateConfig.defineLogs(stack);
+        let logDriver = FargateConfig.defineLogs(this._stack);
 
         execRole.addToPolicy(new iam.PolicyStatement({
                 effect: iam.Effect.ALLOW,
@@ -61,7 +66,7 @@ export class FargateConfig {
             }
         ))
 
-        let taskDefinition = new ecs.FargateTaskDefinition(stack, fargateTaskDefinition, {
+        let taskDefinition = new ecs.FargateTaskDefinition(this._stack, fargateTaskDefinition, {
             executionRole: execRole,
             taskRole: execRole,
             cpu: 256,
@@ -71,18 +76,19 @@ export class FargateConfig {
 
         let containerImage = new ecs.EcrImage(repository, "LATEST");
 
-        new ecs.ContainerDefinition(stack, fargateTaskDefinitionContainer, {
+        new ecs.ContainerDefinition(this._stack, fargateTaskDefinitionContainer, {
             taskDefinition: taskDefinition,
             image: containerImage,
             logging: logDriver,
-            environment: {"some_key": "some_value"},
+            environment: appConf.appVars,
             essential: true,
+            secrets: appConf.appSecrets
         }).addPortMappings({
             containerPort: 8080,
             protocol: Protocol.TCP
         });
 
-        const uiTaskSecurityGroup = new ec2.SecurityGroup(stack, securityGroup, {
+        const uiTaskSecurityGroup = new ec2.SecurityGroup(this._stack, securityGroup, {
             vpc: vpc,
             allowAllOutbound: true,
             securityGroupName: securityGroup
@@ -90,7 +96,7 @@ export class FargateConfig {
 
         uiTaskSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(8080));
 
-        let service = new ecs.FargateService(stack, fargateServiceName,
+        let service = new ecs.FargateService(this._stack, fargateServiceName,
             {
                 cluster: cluster,
                 taskDefinition: taskDefinition,
@@ -103,9 +109,9 @@ export class FargateConfig {
                 assignPublicIp: true
             })
 
-        FargateConfig.createLoadBalancer(stack, service, vpc, uiTaskSecurityGroup)
-
+        FargateConfig.createLoadBalancer(this._stack, service, vpc, uiTaskSecurityGroup)
     }
+
 
     private static defineLogs(stack: Stack) {
         return ecs.LogDrivers.awsLogs({

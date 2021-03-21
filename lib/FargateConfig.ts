@@ -1,6 +1,7 @@
 import * as cdk from '@aws-cdk/core';
 import {Duration, Stack} from '@aws-cdk/core';
 import * as ec2 from "@aws-cdk/aws-ec2";
+import {SubnetType} from "@aws-cdk/aws-ec2";
 import * as ecs from "@aws-cdk/aws-ecs";
 import {FargatePlatformVersion, Protocol} from "@aws-cdk/aws-ecs";
 import * as iam from "@aws-cdk/aws-iam";
@@ -106,7 +107,7 @@ export class FargateConfig {
                 platformVersion: FargatePlatformVersion.LATEST,
                 securityGroups: [uiTaskSecurityGroup],
                 desiredCount: 1,
-                assignPublicIp: true
+                assignPublicIp: false
             })
 
         FargateConfig.createLoadBalancer(this._stack, service, vpc, uiTaskSecurityGroup)
